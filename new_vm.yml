@@ -1,0 +1,127 @@
+---
+- name: check/create instance
+  hosts: localhost
+  gather_facts: False
+
+  vars_files:
+  - vars.yml
+  
+  tasks:
+  #
+  # Build image chech/fetch
+  #
+  - name: check base img box presence
+    shell: "vagrant box list | grep -c {{ base_img_name }}" 
+    register: box_present
+    ignore_errors: yes
+
+  - debug: msg="{{ box_present.stdout }}"
+    when: box_present.stdout != "1"
+
+  - name: fetch base box if missed
+    shell: "vagrant box add {{ base_img_name  }} {{ base_img_src_url }}"
+    when: box_present.stdout == "0"
+
+  #
+  # Create VM
+  #
+
+  - name: generate builder name
+    local_action: command echo "builder_{{ 999999999 | random }}"
+    register: vm_name_raw
+
+  - name: fix name
+    set_fact: 
+      vm_name: "{{ vm_name_raw.stdout}}"
+
+  - name: construct folder name
+    set_fact: 
+      vm_folder: "{{basedir}}/{{ vm_name }}"
+
+  - debug: msg="vm_name={{ vm_name }}"
+
+  - name: create vm folder
+    file: state=directory path={{ vm_folder }}
+
+#  - name: init vagrant box
+#    shell: "vagrant init {{ base_img_name }}"
+#    args:
+#      chdir: "{{ vm_folder }}"
+
+  - name: copy Vagrantfile
+    copy: src="Vagrantfile" dest="{{ vm_folder }}/Vagrantfile"
+
+
+  #
+  # Run first time
+  #
+
+  - name: run VM
+    shell: "vagrant up"
+    args:
+      chdir: "{{ vm_folder }}"
+    ignore_errors: True
+  
+  - name: Get VM ip, check that it's working
+    shell: 'vagrant ssh -c "ip addr show" | grep "inet " | awk '{ print $2  }'| grep "^172" | cut -d"/" -f1 > host_ip && cat host_ip'
+  
+  - name: add it to the special group
+    local_action: add_host hostname={{ nova.info.addresses.vlannet_3[0].addr }} groupname=builder_temp_group
+
+
+  # PROVISIONING
+#- name: provision INSTANCE
+  #hosts: builder_temp_group
+  
+  #tasks:
+  #- name: install pkgs
+    #action: yum state=present pkg={{ item }}
+    #with_items:
+    #- rsync
+    #- openssh-clients
+    #- libselinux-python
+    #- libsemanage-python
+
+  #- name: add repos
+    #action: copy src={{ files }}/{{ item }} dest=/etc/yum.repos.d/{{ item }}
+    #with_items:
+    #- builder.repo
+    #- epel6.repo
+
+  #- name: install additional pkgs
+    #action: yum state=present pkg={{ item }}
+    #with_items:
+    #- mock
+    #- createrepo
+    #- yum-utils
+    #- pyliblzma
+
+  #- name: make sure newest rpm
+    #action: yum name={{ item }} state=latest
+    #with_items:
+    #- rpm
+    #- glib2
+
+  #- yum: name=mock  enablerepo=epel-testing state=latest
+
+  #- name: mockbuilder user   
+    #action: user name=mockbuilder groups=mock
+
+  #- name: mockbuilder .ssh
+    #action: file state=directory path=/home/mockbuilder/.ssh mode=0700 owner=mockbuilder group=mockbuilder
+
+  #- name: mockbuilder authorized_keys
+    #action: authorized_key user=mockbuilder key='{{ lookup('file', '/home/copr/provision/files/buildsys.pub') }}'
+
+  #- name: put updated mock configs into /etc/mock
+    #action: copy src={{ files }}/mock/{{ item }} dest=/etc/mock
+    #with_items:
+    #- site-defaults.cfg
+    #- epel-5-x86_64.cfg
+    #- epel-5-i386.cfg
+    #- fedora-20-x86_64.cfg
+    #- fedora-20-i386.cfg
+    #- epel-7-x86_64.cfg
+
+  #- lineinfile: dest=/root/.bashrc line="ulimit -n 10240" insertafter=EOF
+

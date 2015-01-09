@@ -1,0 +1,22 @@
+---
+# REQUIRE extra_args:
+# - vm_name
+#
+
+- name: terminate instance
+  hosts: localhost
+  gather_facts: False
+
+  vars_files: 
+  - "vars.yml"
+
+  tasks:
+  - debug: msg="Box name {{ base_img_name }}"
+
+  - name: halt VM
+    shell: "vagrant halt -f"
+    args: 
+      chdir: "{{basedir}}/{{ vm_name }}"
+
+  - name: delete VM folder
+    file:  path="{{basedir}}/{{ vm_name }}" state=absent
